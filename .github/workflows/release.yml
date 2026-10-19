@@ -1,0 +1,38 @@
+name: Release
+
+# Push a version tag (e.g. 1.0.1) and this builds the zip and publishes the release.
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version in fxmanifest
+        run: |
+          grep -q "^version '${GITHUB_REF_NAME}'" fxmanifest.lua \
+            || { echo "fxmanifest.lua version does not match tag ${GITHUB_REF_NAME}"; exit 1; }
+
+      - name: Build zip
+        run: |
+          name=${GITHUB_REPOSITORY#*/}
+          mkdir -p "build/$name"
+          cp -r CHANGELOG.md LICENSE README.md config.lua client.lua server.lua fxmanifest.lua stream "build/$name/"
+          (cd build && zip -r "../$name-${GITHUB_REF_NAME}.zip" "$name")
+
+      - name: Release notes from CHANGELOG
+        run: |
+          awk -v v="## ${GITHUB_REF_NAME}" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
+          cat notes.md
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" *.zip --title "${GITHUB_REF_NAME}" --notes-file notes.md
