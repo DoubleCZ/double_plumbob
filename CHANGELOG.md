@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1
+
+- Fixed: changing the colour could leave an extra plumbob frozen in the air (two spawns raced while the model loaded).
+- Fixed: the prop no longer flashes at the spawn point; it stays hidden until it is placed above the head.
+- The plumbob now hides together with its owner (invisible ped, noclip, character select) instead of hanging in place.
+- Restarting the resource resets every plumbob, so none show up right after the start.
+
 ## 1.0.0
 
 First public release.

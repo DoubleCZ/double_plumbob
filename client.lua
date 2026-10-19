@@ -11,7 +11,7 @@ local active = {}
 local function despawn(serverId)
     local data = active[serverId]
     if not data then return end
-    if DoesEntityExist(data.ent) then DeleteEntity(data.ent) end
+    if data.ent and DoesEntityExist(data.ent) then DeleteEntity(data.ent) end
     active[serverId] = nil
 end
 
@@ -22,12 +22,22 @@ local function spawn(serverId, color)
         return
     end
 
-    local player = GetPlayerFromServerId(serverId)
-    if player == -1 then return end
-    local ped = GetPlayerPed(player)
-    if ped == 0 or not DoesEntityExist(ped) then return end
+    -- Claim the slot before the model loads (that yields), so the scope loop and the
+    -- state bag handler can't spawn a second prop that would be left floating
+    local data = { color = color }
+    active[serverId] = data
 
-    lib.requestModel(model)
+    local loaded = pcall(lib.requestModel, model)
+    -- colour changed or plumbob hidden while loading: a newer call owns the slot
+    if active[serverId] ~= data then return end
+    if not loaded then active[serverId] = nil return end
+
+    local player = GetPlayerFromServerId(serverId)
+    local ped = player ~= -1 and GetPlayerPed(player) or 0
+    if ped == 0 or not DoesEntityExist(ped) then
+        active[serverId] = nil
+        return
+    end
 
     local head = GetPedBoneCoords(ped, Config.Bone, 0.0, 0.0, 0.0)
     local pos = head + Config.Offset
@@ -38,8 +48,11 @@ local function spawn(serverId, color)
     FreezeEntityPosition(prop, true)
     SetEntityInvincible(prop, true)
     SetEntityLodDist(prop, 0xFFFF)
+    -- hidden until the render loop has placed it above the head
+    SetEntityVisible(prop, false, false)
 
-    active[serverId] = { ent = prop, color = color }
+    data.ent = prop
+    data.visible = false
 end
 
 -- Bring one player's prop in line with their state bag
@@ -55,10 +68,12 @@ local function evaluate(serverId)
     if GetPlayerFromServerId(serverId) == -1 then return end -- not in scope yet
 
     local color = state.color or Config.DefaultColor
-    if not current or not DoesEntityExist(current.ent) or current.color ~= color then
-        despawn(serverId)
-        spawn(serverId, color)
+    if current and current.color == color and (not current.ent or DoesEntityExist(current.ent)) then
+        return -- up to date, or still loading this colour
     end
+
+    despawn(serverId)
+    spawn(serverId, color)
 end
 
 AddStateBagChangeHandler('plumbob', nil, function(bagName)
@@ -100,16 +115,26 @@ CreateThread(function()
             end
 
             for serverId, data in pairs(active) do
-                local player = GetPlayerFromServerId(serverId)
-                local ped = player ~= -1 and GetPlayerPed(player) or 0
-                if ped ~= 0 and DoesEntityExist(data.ent) then
-                    local head = GetPedBoneCoords(ped, Config.Bone, 0.0, 0.0, 0.0)
-                    SetEntityCoordsNoOffset(data.ent,
-                        head.x + Config.Offset.x,
-                        head.y + Config.Offset.y,
-                        head.z + Config.Offset.z + bob,
-                        false, false, false)
-                    SetEntityRotation(data.ent, 0.0, 0.0, spin, 2, true)
+                if data.ent and DoesEntityExist(data.ent) then
+                    local player = GetPlayerFromServerId(serverId)
+                    local ped = player ~= -1 and GetPlayerPed(player) or 0
+                    -- follow the ped's visibility (noclip, character select); never leave it hanging in the air
+                    local visible = ped ~= 0 and DoesEntityExist(ped) and IsEntityVisible(ped)
+
+                    if visible then
+                        local head = GetPedBoneCoords(ped, Config.Bone, 0.0, 0.0, 0.0)
+                        SetEntityCoordsNoOffset(data.ent,
+                            head.x + Config.Offset.x,
+                            head.y + Config.Offset.y,
+                            head.z + Config.Offset.z + bob,
+                            false, false, false)
+                        SetEntityRotation(data.ent, 0.0, 0.0, spin, 2, true)
+                    end
+
+                    if visible ~= data.visible then
+                        SetEntityVisible(data.ent, visible, false)
+                        data.visible = visible
+                    end
                 end
             end
             Wait(0)

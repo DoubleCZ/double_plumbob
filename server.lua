@@ -32,6 +32,11 @@ local function notify(source, ntype, msg)
     end
 end
 
+-- State bags outlive the resource: start clean so nothing shows right after a restart
+for _, id in ipairs(GetPlayers()) do
+    Player(tonumber(id)).state:set('plumbob', nil, true)
+end
+
 local lastRequest = {}
 
 AddEventHandler('playerDropped', function()
