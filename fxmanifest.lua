@@ -5,7 +5,7 @@ lua54 'yes'
 name 'double_plumbob'
 author 'Doublee'
 description 'The Sims style plumbob above player heads, synced through state bags'
-version '1.0.1'
+version '1.0.2'
 repository 'https://github.com/DoubleCZ/double_plumbob'
 
 dependency 'ox_lib'

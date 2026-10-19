@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- Fixed: game crash after stopping the resource while a stray plumbob prop was still in the world. Untracked props are now removed every 1.5 s and all of them on stop.
+
 ## 1.0.1
 
 - Fixed: changing the colour could leave an extra plumbob frozen in the air (two spawns raced while the model loaded).

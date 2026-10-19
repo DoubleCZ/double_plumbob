@@ -1,8 +1,9 @@
 local L = Config.Locale
 
-local models = {}
+local models, isPlumbob = {}, {}
 for i = 1, #Config.Colors do
     models[Config.Colors[i].name] = Config.Colors[i].model
+    isPlumbob[Config.Colors[i].model] = true
 end
 
 -- serverId -> { ent = entity, color = colour name }
@@ -55,6 +56,26 @@ local function spawn(serverId, color)
     data.visible = false
 end
 
+-- Delete plumbob props this script no longer tracks (or all of them). A prop left in the
+-- world when the resource stops crashes the game once its archetype is unloaded.
+local function removeStrays(all)
+    local tracked = {}
+    if not all then
+        for _, data in pairs(active) do
+            if data.ent then tracked[data.ent] = true end
+        end
+    end
+
+    local objects = GetGamePool('CObject')
+    for i = 1, #objects do
+        local obj = objects[i]
+        if isPlumbob[GetEntityModel(obj)] and not tracked[obj] then
+            SetEntityAsMissionEntity(obj, false, true)
+            DeleteEntity(obj)
+        end
+    end
+end
+
 -- Bring one player's prop in line with their state bag
 local function evaluate(serverId)
     local state = Player(serverId).state.plumbob
@@ -96,6 +117,8 @@ CreateThread(function()
         for serverId in pairs(active) do
             if GetPlayerFromServerId(serverId) == -1 then despawn(serverId) end
         end
+
+        removeStrays(false)
     end
 end)
 
@@ -147,6 +170,7 @@ end)
 AddEventHandler('onResourceStop', function(resource)
     if resource ~= GetCurrentResourceName() then return end
     for serverId in pairs(active) do despawn(serverId) end
+    removeStrays(true)
 end)
 
 local function request(show, color)
